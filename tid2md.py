@@ -13,7 +13,7 @@ cell merging, ...), just use the --tables flag.
 """
 
 __version__ = '0.3.0'
-__author__ = 'Max Schillinger'
+__author__ = 'Max Schillinger'  # Additional fixes by Lumos
 __email__ = 'maxschillinger@web.de'
 
 import sys
@@ -30,7 +30,8 @@ from glob import glob
 re_special_tag = re.compile(r'^tags:.*\$:/tags/')
 re_special_title = re.compile(r'^title: ?\$:/')
 re_external_link = re.compile(r'\[\[(https?://[^\]]+)\]\]')
-re_named_external_link = re.compile(r'\[\[([^|]+)\|([^\]]+)\]\]')
+re_named_external_link = re.compile(r'\[\[([^|\]]+)\|(https?://[^\]]+)\]\]')
+re_named_internal_link = re.compile(r'\[\[([^|\]]+)\|([^\]]+)\]\]')
 re_internal_link = re.compile(r'\[\[([^|]+?)\]\]')
 re_image = re.compile(r'\[img( width=(\d+))? ?\[([^]]+?)\]\]')
 re_url = re.compile(r'(^|[^("<])(https?://[\w#/@:._?%=+-]+)($|[^)">])')
@@ -126,7 +127,7 @@ def write(f: TextIO, line: str, quoted: bool = False):
     f.write(line)
 
 
-def write_markdown_file(lines: list, md_file: Path) -> bool:
+def write_markdown_file(lines: list, md_file: Path, use_angles: bool) -> bool:
     try:
         print(md_file.name)
         with open(md_file, 'w', encoding='UTF-8') as f:
@@ -181,14 +182,33 @@ def write_markdown_file(lines: list, md_file: Path) -> bool:
                 line = re_named_external_link.sub(r'[\1](\2)', line)
                 # [[url]]
                 line = re_external_link.sub(r'<\1>', line)
-                # [[Another tiddler]] → [Another tiddler](#Another%20tiddler)
-                line = re_internal_link.sub(
-                    lambda m: (
-                        f'[{m.group(1)}](#{urllib.parse.quote(m.group(1))})'
-                    ),
-                    line
-                )
-                # [[internal link|Tiddler]] → [internal link](#Tiddler)
+                
+                # Nameless internal links
+                if use_angles:
+                    # [[Another tiddler]] → [](#<Another tiddler>)
+                    line = re_internal_link.sub(r'[](<#\1>)', line)
+                else:
+                    # [[Another tiddler]] → [](#Another%20tiddler)
+                    line = re_internal_link.sub(
+                        lambda m: (
+                            f'[](#{urllib.parse.quote(m.group(1))})'
+                        ),
+                        line
+                    )
+                
+                # Named internal links
+                if use_angles:
+                    # [[internal link|Tiddler]] → [internal link](#<Tiddler>)
+                    line = re_named_internal_link.sub(r'[\1](<#\2>)', line)
+                else:
+                    # [[internal link|Tiddler]] → [internal link](#Tiddler)
+                    line = re_named_internal_link.sub(
+                        lambda m: (
+                            f'[{m.group(1)}](#{urllib.parse.quote(m.group(2))})'
+                        ),
+                        line
+                    )
+                
                 # plain url
                 line = re_url.sub(r'\1<\2>\3', line)
 
@@ -294,7 +314,8 @@ def migrate_tid_file(
         tid_file: Path = None,
         update: bool = False,
         output_directory: Path = None,
-        tables: bool = False) -> bool:
+        tables: bool = False,
+        use_angles = False) -> bool:
     if output_directory:
         meta_file = output_directory / tid_file.name
     else:
@@ -337,7 +358,7 @@ def migrate_tid_file(
 
     index_content = write_meta_file(lines, meta_file)
 
-    result = write_markdown_file(lines[index_content:], md_file)
+    result = write_markdown_file(lines[index_content:], md_file, use_angles)
     if result is False:
         meta_file.unlink()
         md_file.unlink()
@@ -345,15 +366,15 @@ def migrate_tid_file(
     return result
 
 
-def main(tid_file_paths: list = None, update: bool = False,
-         delete_input: bool = False, output_directory: Path = None,
-         tables: bool = False):
+def main(tid_files: list = None, update: bool = False,
+         delete_input: bool = False, output_dir: Path = None,
+         tables: bool = False, use_angles: bool = False):
     skip_count = 0
     migrate_count = 0
     os.system("")  # Enables color output on Windows 10 (not tested)
 
-    if output_directory and not output_directory.is_dir():
-        error(f"The output directory '{output_directory}' does not exist!")
+    if output_dir and not output_dir.is_dir():
+        error(f"The output directory '{output_dir}' does not exist!")
         sys.exit(1)
         
     tid_files = []
@@ -367,9 +388,13 @@ def main(tid_file_paths: list = None, update: bool = False,
                     "Skipping it.")
             skip_count += 1
             continue
+<<<<<<< HEAD
             
         tid_path = Path(tid_file)
         if migrate_tid_file(tid_path, update, output_directory, tables):
+=======
+        if migrate_tid_file(tid_file, update, output_dir, tables, use_angles):
+>>>>>>> feature/angle-link-brackets
             # TODO: Delete if migration was skipped because of existing
             # markdown file?
             if delete_input:
@@ -398,7 +423,13 @@ if __name__ == '__main__':
                         help="Write markdown files in this directory.")
     parser.add_argument("files", nargs='+',
                         help=".tid files to migrate to Markdown.")
+    parser.add_argument('--no-angle-brackets', action='store_true', 
+                        help="If set, internal links will be parsed as URLs "
+                        "instead of being surrounded with <> angle brackets. "
+                        "For example, spaces will be replaced with %20.")
     args = parser.parse_args()
 
+    use_angle_brackets = not args.no_angle_brackets
+
     main(args.files, args.update, args.delete, args.output_directory,
-         args.tables)
+         args.tables, use_angle_brackets)
