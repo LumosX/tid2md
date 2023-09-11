@@ -87,11 +87,6 @@ def is_tiddler(target: str) -> bool:
 
 def write_meta_file(lines: list, meta_file: Path) -> int:
     index = 0
-    if lines[0].split(':', 1)[0] not in ['caption', 'created', 'modified',
-                                         'tags', 'title', 'type']:
-        # no header found
-        return index
-
     type_defined = False
     try:
         with open(meta_file, 'w', encoding='UTF-8') as f:
@@ -366,7 +361,7 @@ def migrate_tid_file(
     return result
 
 
-def main(tid_files: list = None, update: bool = False,
+def main(tid_file_paths: list = None, update: bool = False,
          delete_input: bool = False, output_dir: Path = None,
          tables: bool = False, use_angles: bool = False):
     skip_count = 0
@@ -388,13 +383,9 @@ def main(tid_files: list = None, update: bool = False,
                     "Skipping it.")
             skip_count += 1
             continue
-<<<<<<< HEAD
             
         tid_path = Path(tid_file)
-        if migrate_tid_file(tid_path, update, output_directory, tables):
-=======
-        if migrate_tid_file(tid_file, update, output_dir, tables, use_angles):
->>>>>>> feature/angle-link-brackets
+        if migrate_tid_file(tid_path, update, output_dir, tables, use_angles):
             # TODO: Delete if migration was skipped because of existing
             # markdown file?
             if delete_input:
