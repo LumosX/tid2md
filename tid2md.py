@@ -84,11 +84,6 @@ def is_tiddler(target: str) -> bool:
 
 def write_meta_file(lines: list, meta_file: Path) -> int:
     index = 0
-    if lines[0].split(':', 1)[0] not in ['caption', 'created', 'modified',
-                                         'tags', 'title', 'type']:
-        # no header found
-        return index
-
     type_defined = False
     try:
         with open(meta_file, 'w', encoding='UTF-8') as f:
